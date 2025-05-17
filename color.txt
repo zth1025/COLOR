@@ -1,0 +1,221 @@
+import tkinter as tk
+from tkinter import filedialog
+import cv2
+import numpy as np
+import os
+from sklearn.cluster import KMeans
+from sklearn.svm import SVR
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import StandardScaler
+from sklearn.linear_model import LinearRegression
+from PIL import Image, ImageTk
+image_dir_ph = r'C:\Users\10748\Desktop\color\dataset1'  
+image_dir_glucose = r'C:\Users\10748\Desktop\color\dataset2'  
+sigma = 4
+kmeans_clusters = 2
+X_ph = []  
+y_ph = []
+image_files_ph = [f for f in os.listdir(image_dir_ph) if f.endswith('.png')]
+for file in image_files_ph:
+    try:
+        ph_value = float(os.path.splitext(file)[0])
+    except ValueError:
+        continue
+    y_ph.append(ph_value)
+    img_path = os.path.join(image_dir_ph, file)
+    image = cv2.imread(img_path)
+    if image is None:
+        continue
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    blurred = cv2.GaussianBlur(image, (5, 5), sigma)
+    blurred_rgb = cv2.cvtColor(blurred, cv2.COLOR_BGR2RGB)
+    pixels = blurred_rgb.reshape(-1, 3)
+    kmeans = KMeans(n_clusters=kmeans_clusters, random_state=0)
+    kmeans.fit(pixels)
+    centers = kmeans.cluster_centers_.astype(np.uint8)
+    X_ph.append(centers.flatten())
+X_ph = np.array(X_ph)
+y_ph = np.array(y_ph)
+scaler_ph = StandardScaler()
+X_ph_scaled = scaler_ph.fit_transform(X_ph)
+model_ph = LinearRegression()
+model_ph.fit(X_ph_scaled, y_ph)
+X_glucose = []  
+y_glucose = []  
+
+image_files_glucose = [f for f in os.listdir(image_dir_glucose) if f.endswith('.png')]
+for file in image_files_glucose:
+    try:
+        glucose_value = float(os.path.splitext(file)[0])  
+    except ValueError:
+        continue
+    y_glucose.append(glucose_value)
+
+    img_path = os.path.join(image_dir_glucose, file)
+    image = cv2.imread(img_path)
+    if image is None:
+        continue
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    blurred = cv2.GaussianBlur(image, (5, 5), sigma)
+    blurred_rgb = cv2.cvtColor(blurred, cv2.COLOR_BGR2RGB)
+    pixels = blurred_rgb.reshape(-1, 3)
+    kmeans = KMeans(n_clusters=kmeans_clusters, random_state=0)
+    kmeans.fit(pixels)
+    centers = kmeans.cluster_centers_.astype(np.uint8)
+    X_glucose.append(centers.flatten())
+X_glucose = np.array(X_glucose)
+y_glucose = np.array(y_glucose)
+scaler_glucose = StandardScaler()
+X_glucose_scaled = scaler_glucose.fit_transform(X_glucose)
+model_glucose = SVR(C=10, epsilon=0.01, gamma=0.01)
+model_glucose.fit(X_glucose_scaled, y_glucose)
+predicted_ph = None 
+predicted_glucose = None 
+predicted_night_strain = None 
+predicted_daytime_strain = None 
+def calculate_night_strain():
+    global predicted_night_strain
+    try:
+        S = float(saturation_input.get())  
+        N = (S - 13.634) / 5.151  # 根据公式计算Night Strain (N)
+        night_strain_output.config(text=f"Night Strain: {N:.2f}") 
+        predicted_night_strain = N 
+    except ValueError:
+        night_strain_output.config(text="请输入有效的Saturation值")
+def calculate_daytime_strain():
+    global predicted_daytime_strain
+    try:
+        A = float(delta_area_input.get()) 
+        D = (A - 107.643) / 31.857  
+        daytime_strain_output.config(text=f"Daytime Strain: {D:.2f}")  
+        predicted_daytime_strain = D 
+    except ValueError:
+        daytime_strain_output.config(text="请输入有效的ΔArea值")
+def upload_image_ph():
+    global predicted_ph
+    file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.png")])
+    if not file_path:
+        return
+    image = cv2.imread(file_path)
+    if image is None:
+        return
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    blurred = cv2.GaussianBlur(image, (5, 5), sigma)
+    blurred_rgb = cv2.cvtColor(blurred, cv2.COLOR_BGR2RGB)
+    pixels = blurred_rgb.reshape(-1, 3)
+    kmeans = KMeans(n_clusters=kmeans_clusters, random_state=0)
+    kmeans.fit(pixels)
+    centers = kmeans.cluster_centers_.astype(np.uint8)
+    input_features = centers.flatten().reshape(1, -1)
+    input_features_scaled = scaler_ph.transform(input_features)
+    predicted_ph = model_ph.predict(input_features_scaled)[0]
+    prediction_label_ph.config(text=f"Predicted pH value: {predicted_ph:.2f}")
+    img = Image.open(file_path)
+    img.thumbnail((250, 250))  
+    img_tk = ImageTk.PhotoImage(img)
+    img_label_ph.config(image=img_tk)
+    img_label_ph.image = img_tk  
+def upload_image_glucose():
+    global predicted_glucose
+   file_path = filedialog.askopenfilename(filetypes=[("Image Files", "*.png")])
+    if not file_path:
+        return
+    image = cv2.imread(file_path)
+    if image is None:
+        return
+    image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    blurred = cv2.GaussianBlur(image, (5, 5), sigma)
+    blurred_rgb = cv2.cvtColor(blurred, cv2.COLOR_BGR2RGB)
+    pixels = blurred_rgb.reshape(-1, 3)
+    kmeans = KMeans(n_clusters=kmeans_clusters, random_state=0)
+    kmeans.fit(pixels)
+    centers = kmeans.cluster_centers_.astype(np.uint8)
+    input_features = centers.flatten().reshape(1, -1)
+    input_features_scaled = scaler_glucose.transform(input_features)
+    predicted_glucose = model_glucose.predict(input_features_scaled)[0]
+    prediction_label_glucose.config(text=f"Predicted glucose value:  {predicted_glucose:.2f}")
+    img = Image.open(file_path)
+    img.thumbnail((250, 250)) 
+    img_tk = ImageTk.PhotoImage(img)
+    img_label_glucose.config(image=img_tk)
+    img_label_glucose.image = img_tk  
+
+def predict_result():
+    if predicted_ph is None or predicted_glucose is None:
+        result_label.config(text="请上传并预测pH值和葡萄糖值图片！")
+        return
+
+    if predicted_ph < 7:
+        result = "Normal"
+    elif 7 <= predicted_ph <= 7.5:
+        if predicted_glucose < 10:
+            result = "Mild SSI"
+        else:
+            result = "Moderate SSI"
+    elif predicted_ph > 7.5 and predicted_glucose > 10:
+        result = "Severe SSI"
+    else:
+        result = "Moderate SSI"
+    result_label.config(text=f"Prediction result: {result}")
+def strain_result():
+    if predicted_night_strain is not None:
+        strain_value = predicted_night_strain
+    elif predicted_daytime_strain is not None:
+        strain_value = predicted_daytime_strain
+    else:
+        result_label.config(text="请计算Night Strain或Daytime Strain值！")
+        return
+
+    if strain_value < 10:
+        result = "Normal"
+    elif 10 <= strain_value <= 22:
+        if predicted_glucose < 10:
+            result = "Mild SWD"
+        else:
+            result = "Moderate SWD"
+    elif strain_value > 22 and predicted_glucose > 10:
+        result = "Severe SWD"
+    else:
+        result = "Moderate SWD"
+    result_label.config(text=f"Prediction result: {result}")
+root = tk.Tk()
+root.title("Heal Track")
+root.columnconfigure([0, 1], weight=1, uniform="equal")  
+root.rowconfigure([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], weight=1)  
+upload_button_glucose = tk.Button(root, text="Upload glucose image", command=upload_image_glucose)
+upload_button_glucose.grid(row=0, column=0, columnspan=2,padx=10, pady=10)
+img_label_glucose = tk.Label(root)
+img_label_glucose.grid(row=1, column=0,columnspan=2, pady=10)
+prediction_label_glucose = tk.Label(root, text="Predicted glucose value: ")
+prediction_label_glucose.grid(row=4, column=0,columnspan=2, pady=10)
+upload_button_ph = tk.Button(root, text="Upload pH image", command=upload_image_ph)
+upload_button_ph.grid(row=5, column=0, padx=10, pady=10)
+img_label_ph = tk.Label(root)
+img_label_ph.grid(row=6, column=0, pady=10)
+prediction_label_ph = tk.Label(root, text="Predicted ph value: ")
+prediction_label_ph.grid(row=9, column=0, pady=10)
+saturation_label = tk.Label(root, text="Enter Saturation (S):")
+saturation_label.grid(row=5, column=1, pady=5)
+saturation_input = tk.Entry(root)
+saturation_input.grid(row=6, column=1, pady=5)
+night_strain_button = tk.Button(root, text="Calculate Night Strain", command=calculate_night_strain)
+night_strain_button.grid(row=7, column=1, pady=5)
+night_strain_output = tk.Label(root, text="Night Strain: ")
+night_strain_output.grid(row=8, column=1, pady=5)
+delta_area_label = tk.Label(root, text="Enter ΔArea (A):")
+delta_area_label.grid(row=9, column=1, pady=5)
+delta_area_input = tk.Entry(root)
+delta_area_input.grid(row=10, column=1, pady=5)
+daytime_strain_button = tk.Button(root, text="Calculate Daytime Strain", command=calculate_daytime_strain)
+daytime_strain_button.grid(row=11, column=1, pady=5)
+daytime_strain_output = tk.Label(root, text="Daytime Strain: ")
+daytime_strain_output.grid(row=12, column=1, pady=5)
+predict_button = tk.Button(root, text="Output judgment result SSI", command=predict_result, width=30)
+predict_button.grid(row=13, column=0, pady=10)
+strain_result_button = tk.Button(root, text="Output judgment result SWD", command=strain_result, width=30)
+strain_result_button.grid(row=13, column=1, columnspan=2, pady=10)
+border_frame = tk.Frame(root, background="red")
+result_label = tk.Label(border_frame, text="Prediction result:", bd=0)
+result_label.pack(padx=2, pady=2)
+border_frame.grid(row=14, column=0, columnspan=2, pady=20)
+root.mainloop()
